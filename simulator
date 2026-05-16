@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #08090d;
+    --surface: #0f1117;
+    --surface2: #161820;
+    --border: rgba(255,255,255,0.07);
+    --border-active: rgba(100,210,255,0.4);
+    --text: #e8eaf0;
+    --text-dim: #5a5e72;
+    --text-mid: #9094a8;
+    --accent: #4af0c8;
+    --accent2: #64d2ff;
+    --accent3: #c084fc;
+    --danger: #f97316;
+    --step1: #64d2ff;
+    --step2: #818cf8;
+    --step3: #34d399;
+    --step4: #fbbf24;
+    --step5: #f472b6;
+    --step6: #fb923c;
+    --step7: #4af0c8;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --display: 'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(100,210,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(100,210,255,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .glow-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-orb.a { width: 600px; height: 600px; background: rgba(100,210,255,0.04); top: -200px; left: -100px; }
+  .glow-orb.b { width: 500px; height: 500px; background: rgba(74,240,200,0.04); bottom: -100px; right: -100px; }
+
+  /* Layout */
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .label-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    background: rgba(100,210,255,0.07);
+    border: 1px solid rgba(100,210,255,0.2);
+    padding: 6px 14px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+
+  .label-chip .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(32px, 5vw, 52px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  h1 span {
+    background: linear-gradient(135deg, var(--accent2) 0%, var(--accent) 50%, var(--accent3) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    color: var(--text-mid);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.6;
+    font-weight: 300;
+  }
+
+  /* Input area */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 40px;
+    transition: border-color 0.3s;
+  }
+
+  .input-card:focus-within {
+    border-color: var(--border-active);
+  }
+
+  .input-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .query-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .query-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-family: var(--sans);
+    font-size: 15px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .query-input::placeholder { color: var(--text-dim); }
+  .query-input:focus {
+    border-color: rgba(100,210,255,0.3);
+    box-shadow: 0 0 0 3px rgba(100,210,255,0.06);
+  }
+
+  .run-btn {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border: none;
+    border-radius: 10px;
+    padding: 14px 28px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    color: #08090d;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+    white-space: nowrap;
+  }
+
+  .run-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(100,210,255,0.2); }
+  .run-btn:active { transform: translateY(0); }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Steps grid */
+  .steps-wrapper {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Step card */
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.4s, box-shadow 0.4s;
+    opacity: 0.45;
+  }
+
+  .step-card.active {
+    opacity: 1;
+    border-color: var(--step-color);
+    box-shadow: 0 0 0 1px var(--step-color-dim), 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  .step-card.done {
+    opacity: 1;
+    border-color: rgba(255,255,255,0.1);
+  }
+
+  .step-card.done .step-header { background: rgba(255,255,255,0.015); }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 22px;
+    cursor: pointer;
+    user-select: none;
+    background: transparent;
+    transition: background 0.2s;
+  }
+
+  .step-header:hover { background: rgba(255,255,255,0.02); }
+
+  .step-number {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--step-color-dim);
+    border: 1px solid var(--step-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--step-color);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+
+  .step-card.active .step-number {
+    background: var(--step-color);
+    color: #08090d;
+    font-weight: 700;
+  }
+
+  .step-card.done .step-number {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.15);
+    color: var(--text-mid);
+  }
+
+  .step-card.done.active .step-number {
+    background: var(--step-color);
+    border-color: var(--step-color);
+    color: #08090d;
+  }
+
+  .step-meta { flex: 1; }
+
+  .step-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--step-color);
+    margin-bottom: 3px;
+    opacity: 0.7;
+  }
+
+  .step-title {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .step-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+
+  .step-card.active .status-dot {
+    background: var(--step-color);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .step-card.done .status-dot { background: #34d399; }
+
+  .step-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .step-body.open { max-height: 600px; }
+
+  .step-inner {
+    padding: 0 22px 22px;
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+  }
+
+  .step-desc {
+    font-size: 13.5px;
+    color: var(--text-mid);
+    line-height: 1.65;
+    margin-bottom: 16px;
+    font-weight: 300;
+  }
+
+  /* Visualizations */
+  .viz-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.7;
+    overflow: hidden;
+  }
+
+  .viz-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    animation: fadeSlide 0.3s ease forwards;
+    opacity: 0;
+  }
+
+  .viz-row:last-child { border-bottom: none; }
+
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .chunk-label {
+    color: var(--step-color);
+    font-size: 11px;
+    min-width: 56px;
+    padding-top: 1px;
+    opacity: 0.8;
+  }
+
+  .chunk-text {
+    color: var(--text-mid);
+    font-size: 12px;
+    flex: 1;
+  }
+
+  .chunk-highlight {
+    color: var(--text);
+    background: rgba(74,240,200,0.1);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+
+  /* Vector bar */
+  .vector-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .vector-row { display: flex; align-items: center; gap: 10px; }
+  .vector-bar-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .vector-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--step-color), var(--accent));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .vector-val {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    min-width: 36px;
+    text-align: right;
+  }
+  .vector-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--step-color);
+    min-width: 54px;
+  }
+
+  /* DB grid */
+  .db-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .db-cell {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-dim);
+    transition: all 0.3s;
+  }
+
+  .db-cell.matched {
+    background: rgba(74,240,200,0.08);
+    border-color: rgba(74,240,200,0.3);
+    color: var(--accent);
+  }
+
+  .db-cell-top {
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    opacity: 0.5;
+  }
+
+  .db-cell-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+
+  .db-cell.matched .db-cell-val { color: var(--accent); }
+
+  /* Similarity scores */
+  .sim-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .sim-row:last-child { border-bottom: none; }
+  .sim-text { flex: 1; font-size: 12px; color: var(--text-mid); }
+  .sim-score {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .sim-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    background: rgba(74,240,200,0.1);
+    border: 1px solid rgba(74,240,200,0.25);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* Context injection */
+  .context-block {
+    background: rgba(251,146,60,0.05);
+    border-left: 3px solid var(--danger);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--text-mid);
+    line-height: 1.6;
+  }
+
+  .context-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--danger);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+    opacity: 0.8;
+  }
+
+  .prompt-block {
+    background: rgba(100,210,255,0.04);
+    border: 1px solid rgba(100,210,255,0.15);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 12px;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+
+  /* Answer */
+  .answer-block {
+    background: var(--surface2);
+    border: 1px solid rgba(74,240,200,0.2);
+    border-radius: 10px;
+    padding: 20px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.75;
+    font-weight: 300;
+  }
+
+  .answer-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 16px;
+    background: var(--accent);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* Flow connector */
+  .connector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 20px;
+    color: var(--text-dim);
+    font-size: 16px;
+    opacity: 0.3;
+  }
+
+  /* Progress bar */
+  .progress-track {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: rgba(255,255,255,0.05);
+    z-index: 100;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(100,210,255,0.2);
+    border-top-color: var(--accent2);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Tooltip style explainer */
+  .explainer {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(192,132,252,0.06);
+    border: 1px solid rgba(192,132,252,0.15);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-mid);
+    line-height: 1.6;
+  }
+
+  .explainer-icon {
+    color: var(--accent3);
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* Reset btn */
+  .reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 24px;
+    display: none;
+  }
+  .reset-btn.visible { display: inline-flex; align-items: center; gap: 8px; }
+  .reset-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+
+  /* Quick examples */
+  .examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .example-pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-mid);
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+  }
+
+  .example-pill:hover {
+    border-color: rgba(100,210,255,0.3);
+    color: var(--accent2);
+    background: rgba(100,210,255,0.05);
+  }
+
+  /* completion */
+  .final-message {
+    text-align: center;
+    padding: 32px;
+    display: none;
+  }
+
+  .final-message.visible { display: block; }
+
+  .final-title {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+
+  .final-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .db-grid { grid-template-columns: repeat(2, 1fr); }
+    .query-row { flex-direction: column; }
+    .run-btn { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+<div class="glow-orb a"></div>
+<div class="glow-orb b"></div>
+
+<div class="container">
+  <header>
+    <div class="label-chip"><span class="dot"></span> Interactive Simulator</div>
+    <h1>How <span>RAG</span> Works</h1>
+    <p class="subtitle">Type a question. Watch it travel through all seven steps — from raw data to a grounded answer.</p>
+  </header>
+
+  <div class="input-card">
+    <span class="input-label">Ask a question</span>
+    <div class="query-row">
+      <input class="query-input" id="queryInput" placeholder="e.g. What is the capital of France?" type="text" />
+      <button class="run-btn" id="runBtn" onclick="runRAG()">Run Pipeline →</button>
+    </div>
+    <div class="examples">
+      <span class="example-pill" onclick="setExample(this)">What is photosynthesis?</span>
+      <span class="example-pill" onclick="setExample(this)">How do black holes form?</span>
+      <span class="example-pill" onclick="setExample(this)">What causes inflation?</span>
+      <span class="example-pill" onclick="setExample(this)">How does the immune system work?</span>
+    </div>
+  </div>
+
+  <div class="steps-wrapper" id="stepsWrapper">
+    <!-- Steps injected by JS -->
+  </div>
+
+  <div style="text-align:center">
+    <button class="reset-btn" id="resetBtn" onclick="resetAll()">↺ Run another query</button>
+  </div>
+
+  <div class="final-message" id="finalMessage">
+    <div class="final-title">Pipeline complete.</div>
+    <div class="final-sub">That's RAG — seven steps, one grounded answer.</div>
+  </div>
+</div>
+
+<script>
+const STEPS = [
+  {
+    id: 1,
+    tag: "Step 01",
+    title: "Chunking",
+    color: "#64d2ff",
+    colorDim: "rgba(100,210,255,0.08)",
+    desc: "Your source data gets split into smaller, digestible pieces. Chunk size is a real tradeoff — too large and retrieval loses precision, too small and individual chunks lose enough context to be useful.",
+    renderViz: (query) => {
+      const corpus = [
+        "The process of photosynthesis converts sunlight into glucose using chlorophyll.",
+        "Black holes are formed when massive stars collapse under their own gravity.",
+        "Inflation occurs when the general price level of goods and services rises over time.",
+        "The immune system uses white blood cells to identify and destroy pathogens.",
+        "Quantum entanglement allows particles to be correlated regardless of distance.",
+        "Machine learning models learn patterns from large datasets to make predictions.",
+        "The mitochondria is often called the powerhouse of the cell.",
+        "Economic growth is measured by gross domestic product (GDP) per capita."
+      ];
+      let html = '<div class="viz-box">';
+      corpus.forEach((chunk, i) => {
+        const isRelevant = i < 2; // first two always highlighted for demo
+        html += `<div class="viz-row" style="animation-delay:${i*0.07}s">
+          <span class="chunk-label">chunk_${String(i).padStart(3,'0')}</span>
+          <span class="chunk-text">${chunk.substring(0,80)}${chunk.length>80?'…':''}</span>
+        </div>`;
+      });
+      html += '</div>';
+      html += `<div class="explainer"><span class="explainer-icon">⚡</span><span>Overlap between chunks is common — a sentence or two of buffer ensures context doesn't break at the boundary.</span></div>`;
+      return html;
+    }
+  },
+  {
+    id: 2,
+    tag: "Step 02",
+    title: "Embedding",
+    color: "#818cf8",
+    colorDim: "rgba(129,140,248,0.08)",
+    desc: "Each chunk gets passed through an embedding model (like OpenAI's text-embedding-3 or Cohere's embed-v3). The output is a vector — a list of numbers that encodes semantic meaning. Similar ideas land near each other in vector space.",
+    renderViz: (query) => {
+      const chunks = ["photosynthesis / chlorophyll / sunlight", "black holes / gravity / collapse", "inflation / prices / goods", "immune / white blood cells / pathogens"];
+      const vals = [
+        [0.82, 0.34, 0.61, 0.19],
+        [0.15, 0.91, 0.44, 0.72],
+        [0.47, 0.23, 0.88, 0.31],
+        [0.63, 0.55, 0.17, 0.94]
+      ];
+      let html = '<div class="viz-box"><div class="vector-wrap">';
+      chunks.forEach((c, i) => {
+        html += `<div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;font-family:var(--mono)">chunk_${String(i).padStart(3,'0')} → [${vals[i].map(v=>v.toFixed(2)).join(', ')}, ...]</div>`;
+        vals[i].forEach((v, j) => {
+          html += `<div class="vector-row">
+            <span class="vector-id">dim_${j+1}</span>
+            <div class="vector-bar-track"><div class="vector-bar-fill" id="vbar_${i}_${j}" style="width:${v*100}%"></div></div>
+            <span class="vector-val">${v.toFixed(3)}</span>
+          </div>`;
+        });
+        html += '</div>';
+      });
+      html += '</div></div>';
+      html += `<div class="explainer"><span class="explainer-icon">⚡</span><span>The query gets embedded with the same model. That's what makes the comparison meaningful — both live in the same vector space.</span></div>`;
+      return html;
+    }
+  },
+  {
+    id: 3,
+    tag: "Step 03",
+    title: "Storing",
+    color: "#34d399",
+    colorDim: "rgba(52,211,153,0.08)",
+    desc: "Vectors get indexed in a vector database — Pinecone, Weaviate, ChromaDB, or even pgvector. The DB is built for one thing: finding nearby vectors fast, at scale.",
+    renderViz: (query) => {
+      const ids = ["vec_000","vec_001","vec_002","vec_003","vec_004","vec_005","vec_006","vec_007","vec_008","vec_009","vec_010","vec_011"];
+      let html = '<div class="viz-box"><div class="db-grid">';
+      ids.forEach((id,i) => {
+        html += `<div class="db-cell" id="dbcell_${i}">
+          <div class="db-cell-top">ID</div>
+          <div class="db-cell-val">${id}</div>
+        </div>`;
+      });
+      html += '</div></div>';
+      html += `<div class="explainer"><span class="explainer-icon">⚡</span><span>Approximate Nearest Neighbor (ANN) algorithms like HNSW make this search extremely fast — even across millions of vectors.</span></div>`;
+      return html;
+    }
+  },
+  {
+    id: 4,
+    tag: "Step 04",
+    title: "Query",
+    color: "#fbbf24",
+    colorDim: "rgba(251,191,36,0.08)",
+    desc: "When a user asks a question, that question goes through the exact same embedding model used in Step 2. The output is a query vector sitting somewhere in the same space as all your chunks.",
+    renderViz: (query) => {
+      const displayQuery = query || "What is photosynthesis?";
+      const fakeVec = [0.78, 0.41, 0.55, 0.22, 0.69, 0.13];
+      let html = `<div class="viz-box">
+        <div class="viz-row" style="animation-delay:0s">
+          <span class="chunk-label" style="color:var(--step4-c,#fbbf24)">query</span>
+          <span class="chunk-text">"${displayQuery}"</span>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-bottom:8px">→ query vector</div>
+        <div style="font-family:var(--mono);font-size:12px;color:#fbbf24;padding:10px;background:rgba(251,191,36,0.05);border-radius:6px;border:1px solid rgba(251,191,36,0.15)">
+          [${fakeVec.map(v=>v.toFixed(3)).join(', ')}, ...]
+        </div>
+        </div>
+      </div>`;
+      html += `<div class="explainer"><span class="explainer-icon">⚡</span><span>The model doesn't know anything about your database yet — it just converts the question into numbers.</span></div>`;
+      return html;
+    }
+  },
+  {
+    id: 5,
+    tag: "Step 05",
+    title: "Retrieval",
+    color: "#f472b6",
+    colorDim: "rgba(244,114,182,0.08)",
+    desc: "The query vector gets compared to every stored vector using cosine similarity or dot product. The top-k most similar chunks get pulled out. This is semantic search — it finds meaning, not matching words.",
+    renderViz: (query) => {
+      const results = [
+        { text: "Photosynthesis converts sunlight into glucose using chlorophyll in plant cells.", score: 0.94, badge: true },
+        { text: "Chlorophyll absorbs light energy, primarily from blue and red wavelengths.", score: 0.87, badge: true },
+        { text: "Plants produce oxygen as a byproduct of the light-dependent reactions.", score: 0.79, badge: true },
+        { text: "Mitochondria generate ATP through cellular respiration in animals.", score: 0.41 },
+        { text: "Inflation is measured by the consumer price index (CPI).", score: 0.12 },
+      ];
+      let html = '<div class="viz-box">';
+      results.forEach((r,i) => {
+        html += `<div class="sim-row" style="animation-delay:${i*0.1}s">
+          <span class="sim-text">${r.text}</span>
+          <span class="sim-score">${r.score.toFixed(2)}</span>
+          ${r.badge ? '<span class="sim-badge">retrieved</span>' : ''}
+        </div>`;
+      });
+      html += '</div>';
+      html += `<div class="explainer"><span class="explainer-icon">⚡</span><span>Only the top-3 chunks get retrieved here (k=3). You control k — more retrieved chunks means more context, but also more noise.</span></div>`;
+      return html;
+    }
+  },
+  {
+    id: 6,
+    tag: "Step 06",
+    title: "Augmentation",
+    color: "#fb923c",
+    colorDim: "rgba(251,146,60,0.08)",
+    desc: "The retrieved chunks get injected into the LLM's prompt as context — placed before the question so the model can read both when generating its answer.",
+    renderViz: (query) => {
+      const displayQuery = query || "What is photosynthesis?";
+      let html = `<div>
+        <div class="context-label">Injected context</div>
+        <div class="context-block">chunk_000: Photosynthesis converts sunlight into glucose using chlorophyll in plant cells.</div>
+        <div class="context-block">chunk_001: Chlorophyll absorbs light energy, primarily from blue and red wavelengths.</div>
+        <div class="context-block">chunk_002: Plants produce oxygen as a byproduct of the light-dependent reactions.</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);margin:14px 0 8px">Full prompt sent to LLM:</div>
+        <div class="prompt-block">
+          <span style="color:var(--danger);opacity:0.7">system:</span> Use only the provided context to answer.<br><br>
+          <span style="color:var(--accent2);opacity:0.7">context:</span> [chunk_000] [chunk_001] [chunk_002]<br><br>
+          <span style="color:#fbbf24;opacity:0.7">user:</span> ${displayQuery}
+        </div>
+      </div>`;
+      html += `<div class="explainer"><span class="explainer-icon">⚡</span><span>The system prompt typically tells the model to ground its answer in the context only — which prevents hallucination on out-of-scope questions.</span></div>`;
+      return html;
+    }
+  },
+  {
+    id: 7,
+    tag: "Step 07",
+    title: "Generation",
+    color: "#4af0c8",
+    colorDim: "rgba(74,240,200,0.08)",
+    desc: "The LLM reads the question and the injected context together, then generates a response grounded in your actual data — not its training weights alone.",
+    renderViz: (query) => {
+      const answers = {
+        default: "Photosynthesis is the process by which plants convert light energy — primarily from sunlight — into chemical energy stored as glucose. This happens in two stages: the light-dependent reactions, which occur in the thylakoid membranes and produce ATP and NADPH, and the Calvin cycle, which uses that energy to fix carbon dioxide into sugars. Oxygen is released as a byproduct. The key molecule enabling this is chlorophyll, which absorbs red and blue wavelengths of light.",
+        "black holes": "Black holes form when massive stars — typically those 20 or more times the mass of our Sun — exhaust their nuclear fuel and collapse under gravity. The core compresses into a singularity while the outer layers explode in a supernova. The resulting object has gravity so intense that nothing, including light, can escape beyond the event horizon. Smaller stellar-mass black holes form from collapsing stars, while supermassive black holes at galactic centers may form through mergers or direct collapse of massive gas clouds.",
+        "inflation": "Inflation occurs when the general price level of goods and services rises persistently over time, reducing purchasing power. It's typically driven by demand-pull factors (more money chasing the same goods), cost-push factors (rising production costs), or expansion of the money supply. Central banks — like the Federal Reserve — manage inflation primarily through interest rate policy. Moderate inflation around 2% is considered healthy; runaway inflation erodes savings and destabilizes economies.",
+        "immune": "The immune system is a multi-layered defense network. The innate immune system provides the first response — inflammation, fever, and natural killer cells that attack anything foreign. If a pathogen breaks through, the adaptive immune system activates: B cells produce antibodies specific to that pathogen's antigens, while T cells either kill infected cells directly or coordinate the immune response. Memory cells are retained after the infection clears, allowing faster response upon re-exposure — the basis of vaccination."
+      };
+      const q = (query||"").toLowerCase();
+      let answer = answers.default;
+      if (q.includes("black hole")) answer = answers["black holes"];
+      else if (q.includes("inflation")) answer = answers["inflation"];
+      else if (q.includes("immune")) answer = answers["immune"];
+
+      return `<div class="answer-block" id="answerBlock"></div>
+      <script>
+        (function(){
+          const el = document.getElementById('answerBlock');
+          const text = ${JSON.stringify(answer)};
+          let i = 0;
+          const cursor = document.createElement('span');
+          cursor.className = 'answer-cursor';
+          el.appendChild(cursor);
+          const t = setInterval(()=>{
+            if(i < text.length){
+              el.insertBefore(document.createTextNode(text[i]), cursor);
+              i++;
+            } else {
+              clearInterval(t);
+              cursor.style.display = 'none';
+            }
+          }, 18);
+        })();
+      <\/script>`;
+    }
+  }
+];
+
+let currentStep = -1;
+let query = '';
+let isRunning = false;
+
+function setExample(el) {
+  document.getElementById('queryInput').value = el.textContent;
+  document.getElementById('queryInput').focus();
+}
+
+function buildSteps() {
+  const wrapper = document.getElementById('stepsWrapper');
+  wrapper.innerHTML = '';
+  STEPS.forEach((step, idx) => {
+    const card = document.createElement('div');
+    card.className = 'step-card';
+    card.id = `step_card_${step.id}`;
+    card.style.setProperty('--step-color', step.color);
+    card.style.setProperty('--step-color-dim', step.colorDim);
+    card.innerHTML = `
+      <div class="step-header" onclick="toggleBody(${step.id})">
+        <div class="step-number">${step.id}</div>
+        <div class="step-meta">
+          <div class="step-tag">${step.tag}</div>
+          <div class="step-title">${step.title}</div>
+        </div>
+        <div class="step-status">
+          <span class="status-dot"></span>
+          <span class="status-text" id="status_${step.id}">waiting</span>
+        </div>
+      </div>
+      <div class="step-body" id="body_${step.id}">
+        <div class="step-inner">
+          <p class="step-desc">${step.desc}</p>
+          <div id="viz_${step.id}"></div>
+        </div>
+      </div>
+    `;
+    wrapper.appendChild(card);
+    if (idx < STEPS.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = 'connector';
+      conn.innerHTML = '↓';
+      wrapper.appendChild(conn);
+    }
+  });
+}
+
+function toggleBody(stepId) {
+  const body = document.getElementById(`body_${stepId}`);
+  body.classList.toggle('open');
+}
+
+function setStepStatus(id, status) {
+  const card = document.getElementById(`step_card_${id}`);
+  const statusText = document.getElementById(`status_${id}`);
+  card.className = `step-card ${status === 'active' ? 'active' : status === 'done' ? 'done' : ''}`;
+  const step = STEPS.find(s => s.id === id);
+  card.style.setProperty('--step-color', step.color);
+  card.style.setProperty('--step-color-dim', step.colorDim);
+  if (status === 'active') statusText.textContent = 'processing';
+  if (status === 'done') statusText.textContent = 'done';
+  if (status === 'waiting') statusText.textContent = 'waiting';
+}
+
+function openBody(id) {
+  const body = document.getElementById(`body_${id}`);
+  body.classList.add('open');
+  body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeBody(id) {
+  const body = document.getElementById(`body_${id}`);
+  body.classList.remove('open');
+}
+
+async function runStep(step) {
+  setStepStatus(step.id, 'active');
+  openBody(step.id);
+
+  const viz = document.getElementById(`viz_${step.id}`);
+  viz.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:16px 0;color:var(--text-dim);font-family:var(--mono);font-size:12px"><span class="spinner"></span> Processing ${step.title.toLowerCase()}...</div>`;
+
+  await delay(900 + Math.random() * 400);
+
+  viz.innerHTML = step.renderViz(query);
+
+  // Animate vector bars
+  if (step.id === 2) {
+    setTimeout(() => {
+      document.querySelectorAll('.vector-bar-fill').forEach(bar => {
+        const target = bar.style.width;
+        bar.style.width = '0%';
+        setTimeout(() => { bar.style.width = target; }, 100);
+      });
+    }, 100);
+  }
+
+  // Animate DB cells
+  if (step.id === 3) {
+    setTimeout(() => {
+      [0,1,4,7].forEach((i,j) => {
+        setTimeout(() => {
+          const cell = document.getElementById(`dbcell_${i}`);
+          if (cell) cell.classList.add('matched');
+        }, j * 150);
+      });
+    }, 300);
+  }
+
+  await delay(400);
+  setStepStatus(step.id, 'done');
+  const progress = (step.id / STEPS.length) * 100;
+  document.getElementById('progressFill').style.width = progress + '%';
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function runRAG() {
+  if (isRunning) return;
+  query = document.getElementById('queryInput').value.trim();
+  if (!query) {
+    document.getElementById('queryInput').style.borderColor = 'rgba(249,115,22,0.5)';
+    setTimeout(() => document.getElementById('queryInput').style.borderColor = '', 1500);
+    return;
+  }
+
+  isRunning = true;
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('runBtn').innerHTML = '<span class="spinner"></span> Running...';
+  document.getElementById('queryInput').disabled = true;
+  document.getElementById('progressFill').style.width = '0%';
+
+  buildSteps();
+  await delay(200);
+
+  for (const step of STEPS) {
+    await runStep(step);
+    await delay(350);
+  }
+
+  document.getElementById('finalMessage').classList.add('visible');
+  document.getElementById('resetBtn').classList.add('visible');
+  isRunning = false;
+}
+
+function resetAll() {
+  document.getElementById('queryInput').value = '';
+  document.getElementById('queryInput').disabled = false;
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runBtn').innerHTML = 'Run Pipeline →';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('finalMessage').classList.remove('visible');
+  document.getElementById('resetBtn').classList.remove('visible');
+  document.getElementById('stepsWrapper').innerHTML = '';
+  isRunning = false;
+  query = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Enter key support
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('queryInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runRAG();
+  });
+});
+</script>
+</body>
+</html>
